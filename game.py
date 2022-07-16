@@ -12,10 +12,48 @@ screen = pygame.display.set_mode(WINDOW_SIZE, 0, 32)\
 display = pygame.Surface((300, 200))
 pygame.display.set_caption("Le Geam")
 
+# animations
+global animation_frames
+animation_frames = {}
+
+# dictionary stores how long the fn of each animation frame,
+# and uses frame_durations to track how many game frames each animation frame stays for
+
+def load_anim(path, frames_durations):
+    global animation_frames
+    # loads path to file, takes last dir of path and grabs the name from it
+    # naming matches file tree
+    anim_name = path.split('/')[-1]
+    anim_frame_data = []
+    n = 0
+    for frame in frames_durations:
+        anim_frame_id = anim_name + '_' + str(n)
+        img_loc = path + '/' + anim_frame_id + '.png'
+        anim_img = pygame.image.load(img_loc).convert()
+        anim_img.set_colorkey((255,255,255))
+        animation_frames[anim_frame_id] = anim_img.copy()
+        for i in range(frame):
+            anim_frame_data.append(anim_frame_id)
+        n+=1
+    return anim_frame_data
+#print(load_anim('player_animations/idle', [7, 7, 40]))
+
+def change_action(cur_action, frame, new_action):
+    if cur_action != new_action:
+        cur_action = new_action
+        frame = 0
+    return cur_action, frame
+
+anim_db = {}
+anim_db['run'] = load_anim('player_animations/run', [7, 7])
+anim_db['idle'] = load_anim('player_animations/idle', [7, 7, 40])
+
+player_action = 'idle'
+player_frame = 0
+player_flip = False # flip player when moving left/right
+
 # load images
 player_img = pygame.image.load("imgs/playera.png")
-player_img.set_colorkey((252, 255, 255)) # makes rgb val transp (like greenscreen)
-#player_img = pygame.transform.scale(player_img, (40, 40))
 grass_img = pygame.image.load("imgs/grass.png")
 dirt_img = pygame.image.load("imgs/dirt.png")
 TILE_SIZE = grass_img.get_width()
@@ -142,6 +180,16 @@ while 1: # game loop
     if player_ymomentum > 3:
         player_ymomentum = 3
 
+    # set action for player animations
+    if player_mvmt[0] > 0:
+        player_action, player_frame = change_action(player_action, player_frame, 'run')
+        player_flip = False
+    if player_mvmt[0] == 0:
+        player_action, player_frame = change_action(player_action, player_frame, 'idle')
+    if player_mvmt[0] < 0:
+        player_action, player_frame = change_action(player_action, player_frame, 'run')
+        player_flip = True
+
     # call move function on player
     player_rect, collisions = move(player_rect, player_mvmt, tile_rects)
 
@@ -161,7 +209,14 @@ while 1: # game loop
         player_ymomentum = 0
 
     # coords increase from top left, to bottom right
-    display.blit(player_img, (player_rect.x - scroll[0], player_rect.y - scroll[1])) # put img loaded onto screen
+    player_frame += 1
+    if player_frame >= len(anim_db[player_action]):
+        player_frame = 0
+    # access the img id corresponding to the player_frame of the current action
+    player_img_id = anim_db[player_action][player_frame]
+    # access the id of the loaded images list
+    player_img = animation_frames[player_img_id]
+    display.blit(pygame.transform.flip(player_img, player_flip, False), (player_rect.x - scroll[0], player_rect.y - scroll[1])) # put img loaded onto screen
 
     for event in pygame.event.get(): # event loop
         if event.type == pygame.QUIT: # check for window quit
