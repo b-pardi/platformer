@@ -1,3 +1,4 @@
+from cv2 import line
 import pygame
 import sys
 
@@ -32,20 +33,20 @@ air_timer = 0
 player_rect = pygame.Rect(50, 50, player_img.get_width(), player_img.get_height())
 collide_rect = pygame.Rect(100, 100, 100, 50)
 
+# move tiles for scrolling screen
+true_scroll = [0,0]
+
 # game_map[y][x]
-game_map = [['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'],
-            ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'],
-            ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'],
-            ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'],
-            ['0','0','0','0','0','0','0','2','2','2','2','2','0','0','0','0','0','0','0'],
-            ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'],
-            ['2','2','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','2','2'],
-            ['1','1','2','2','2','2','2','2','2','2','2','2','2','2','2','2','2','1','1'],
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1']]
+def load_map(path):
+    with open(path + ".txt", 'r') as fp:
+        line_data = fp.read().split('\n')
+        map = []
+        for row in line_data:
+            map.append(list(row))
+    return map
+    
+
+game_map = load_map("maps/map")
 
 def collision_test(rect, tiles):
     collided = []
@@ -83,12 +84,22 @@ def move(rect, mvmt, tiles):
             collision_directions['top'] = True
     return rect, collision_directions
 
-while 1:
+while 1: # game loop
     # fill screen each iter to not leave trail of images moving on screen
     display.fill((0, 200, 200))
 
-    tile_rects = []
+    # make scroll follow player
+    # adjust to center display on player (half display w/h + half player w/h)
+    display_xcenter = 152
+    display_ycenter = 106
+    true_scroll[0] += (player_rect.x - true_scroll[0] - display_xcenter)/6
+    true_scroll[1] += (player_rect.y - true_scroll[1] - display_ycenter)/10
+    scroll = true_scroll.copy()
+    scroll[0] = int(scroll[0]) # convert to ints to avoid visual tearing of tiles
+    scroll[1] = int(scroll[1])
+
     # render game map iterating through each cell of 2D game map
+    tile_rects = []
     y = 0
     for row in game_map:
         x = 0
@@ -96,11 +107,12 @@ while 1:
             # x and y are coordinates of tiles in map,
             # mult by size of image to get screen coordinate for placement
             if tile == '1':
-                display.blit(dirt_img, (x*TILE_SIZE, y*TILE_SIZE))
+                display.blit(dirt_img, (x*TILE_SIZE-scroll[0], y*TILE_SIZE-scroll[1]))
             if tile == '2':
-                display.blit(grass_img, (x*TILE_SIZE, y*TILE_SIZE))
+                display.blit(grass_img, (x*TILE_SIZE-scroll[0], y*TILE_SIZE-scroll[1]))
             if tile != '0':
-                tile_rects.append(pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)) # need to keep track of ground tiles for collision physics later
+                # need to keep track of ground tiles for collision physics later
+                tile_rects.append(pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE))
             x += 1
         y += 1
 
@@ -126,12 +138,15 @@ while 1:
     else:
         air_timer += 1
 
+    if collisions['left'] == True or collisions['right'] == True:
+        air_timer = 1
+
     # touching ceiling collision for jumping and hitting head
     if collisions['top'] == True:
         player_ymomentum = 0
 
     # coords increase from top left, to bottom right
-    display.blit(player_img, (player_rect.x, player_rect.y)) # put img loaded onto screen
+    display.blit(player_img, (player_rect.x - scroll[0], player_rect.y - scroll[1])) # put img loaded onto screen
 
     for event in pygame.event.get(): # event loop
         if event.type == pygame.QUIT: # check for window quit
