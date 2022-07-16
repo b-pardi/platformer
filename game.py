@@ -36,6 +36,11 @@ collide_rect = pygame.Rect(100, 100, 100, 50)
 # move tiles for scrolling screen
 true_scroll = [0,0]
 
+# parallax scrolling, first value scalar to change how fast it moves,
+# second value is pygame rect object (x, y, w, h)
+# lower scalar values move quicker (render them first!!)
+background_objects = [[0.25,[120,10,70,400]],[0.25,[280,30,40,400]],[0.5,[30,40,40,400]],[0.5,[130,90,100,400]],[0.5,[300,80,120,400]]]
+
 # game_map[y][x]
 def load_map(path):
     with open(path + ".txt", 'r') as fp:
@@ -45,7 +50,6 @@ def load_map(path):
             map.append(list(row))
     return map
     
-
 game_map = load_map("maps/map")
 
 def collision_test(rect, tiles):
@@ -92,11 +96,22 @@ while 1: # game loop
     # adjust to center display on player (half display w/h + half player w/h)
     display_xcenter = 152
     display_ycenter = 106
-    true_scroll[0] += (player_rect.x - true_scroll[0] - display_xcenter)/6
+    true_scroll[0] += (player_rect.x - true_scroll[0] - display_xcenter)/16
     true_scroll[1] += (player_rect.y - true_scroll[1] - display_ycenter)/10
     scroll = true_scroll.copy()
     scroll[0] = int(scroll[0]) # convert to ints to avoid visual tearing of tiles
     scroll[1] = int(scroll[1])
+
+    # drawing parallax scrolling
+    pygame.draw.rect(display, (7, 80, 75), pygame.Rect(0, 120, 300, 80))
+    for bg_obj in background_objects: # base data * distance scalar for x, & y, obj width, obj height
+        obj_rect = pygame.Rect(bg_obj[1][0] - scroll[0] * bg_obj[0],
+                                bg_obj[1][1] - scroll[1] * bg_obj[0],
+                                bg_obj[1][2], bg_obj[1][3])
+        if bg_obj[0] == 0.5:
+            pygame.draw.rect(display, (14, 222, 150), obj_rect)
+        else:
+            pygame.draw.rect(display, (10, 90, 80), obj_rect)
 
     # render game map iterating through each cell of 2D game map
     tile_rects = []
