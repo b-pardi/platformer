@@ -1,141 +1,109 @@
-from cv2 import line
-import pygame
-import sys
+import pygame, sys
+import random as rand
+import framework as f
+import engine as e
 
+# initializers and global constants
+pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
+pygame.mixer.set_num_channels(32) # sets how many different sounds can play at once
 clock = pygame.time.Clock()
 FPS = 60
 WINDOW_SIZE = (800, 600)
-screen = pygame.display.set_mode(WINDOW_SIZE, 0, 32)\
 # surfaces are just images
 # write all onto display, to scale up to screen size for consistency
+screen = pygame.display.set_mode(WINDOW_SIZE, 0, 32)
 display = pygame.Surface((300, 200))
 pygame.display.set_caption("Le Geam")
+f.load_animations('data/entities/')
 
-# animations
-global animation_frames
-animation_frames = {}
-
-# dictionary stores how long the fn of each animation frame,
-# and uses frame_durations to track how many game frames each animation frame stays for
-
-def load_anim(path, frames_durations):
-    global animation_frames
-    # loads path to file, takes last dir of path and grabs the name from it
-    # naming matches file tree
-    anim_name = path.split('/')[-1]
-    anim_frame_data = []
-    n = 0
-    for frame in frames_durations:
-        anim_frame_id = anim_name + '_' + str(n)
-        img_loc = path + '/' + anim_frame_id + '.png'
-        anim_img = pygame.image.load(img_loc).convert()
-        anim_img.set_colorkey((255,255,255))
-        animation_frames[anim_frame_id] = anim_img.copy()
-        for i in range(frame):
-            anim_frame_data.append(anim_frame_id)
-        n+=1
-    return anim_frame_data
-#print(load_anim('player_animations/idle', [7, 7, 40]))
-
-def change_action(cur_action, frame, new_action):
-    if cur_action != new_action:
-        cur_action = new_action
-        frame = 0
-    return cur_action, frame
-
-anim_db = {}
-anim_db['run'] = load_anim('player_animations/run', [7, 7])
-anim_db['idle'] = load_anim('player_animations/idle', [7, 7, 40])
-
-player_action = 'idle'
-player_frame = 0
-player_flip = False # flip player when moving left/right
-
-# load images
-player_img = pygame.image.load("imgs/playera.png")
-grass_img = pygame.image.load("imgs/grass.png")
-dirt_img = pygame.image.load("imgs/dirt.png")
-TILE_SIZE = grass_img.get_width()
-
-# initial vars
-player_loc = [50,50]
+# declaring initial variables for use in game loop
+grass_sfx_timer = 0 # time between playing grass walking sfx
+player_loc = [50,50] # initial location of player
 moving_left = False
 moving_right = False
-player_ymomentum = 0
-
-# air timer for quality of life when jumping of ledges
-air_timer = 0
-
-# declare rects
-player_rect = pygame.Rect(50, 50, player_img.get_width(), player_img.get_height())
-collide_rect = pygame.Rect(100, 100, 100, 50)
-
-# move tiles for scrolling screen
-true_scroll = [0,0]
-
+player_ymomentum = 0 
+air_timer = 0 # delay timer to improve jumping
+true_scroll = [0,0] # move tiles for scrolling screen
 # parallax scrolling, first value scalar to change how fast it moves,
 # second value is pygame rect object (x, y, w, h)
 # lower scalar values move quicker (render them first!!)
-background_objects = [[0.25,[120,10,70,400]],[0.25,[280,30,40,400]],[0.5,[30,40,40,400]],[0.5,[130,90,100,400]],[0.5,[300,80,120,400]]]
+background_objects = [[0.25,[120,10,70,400]],[0.25,[280,30,40,400]],
+                    [0.5,[30,40,40,400]],[0.5,[130,90,100,400]],[0.5,[300,80,120,400]]]
 
-# game_map[y][x]
-def load_map(path):
+# load images
+player_img = pygame.image.load("data/imgs/playera.png")
+grass_img = pygame.image.load("data/imgs/grass.png")
+dirt_img = pygame.image.load("data/imgs/dirt.png")
+plant_img = pygame.image.load("data/imgs/plant.png").convert()
+plant_img.set_colorkey((255,255,255))
+TILE_SIZE = grass_img.get_width()
+
+tile_ind = {1:grass_img,
+            2:dirt_img,
+            3:plant_img}
+
+# load sounds
+jump_sfx = pygame.mixer.Sound("data/sounds/jump.wav")
+jump_sfx.set_volume(0.4)
+grass_sfx = [pygame.mixer.Sound("data/sounds/grass_0.wav"), pygame.mixer.Sound("data/sounds/grass_1.wav")]
+grass_sfx[0].set_volume(0.3)
+grass_sfx[1].set_volume(0.3)
+pygame.mixer.music.load("data/sounds/music.wav")
+# paramater is how many times music plays, -1 is indefinite
+pygame.mixer.music.play(-1)
+
+# declare entities
+player = f.entity(100, 100, player_img.get_width(), player_img.get_height(), 'player')
+
+# old method of map generation using 2D list from text file
+def load_map(path): # game_map[y][x]
     with open(path + ".txt", 'r') as fp:
         line_data = fp.read().split('\n')
         map = []
         for row in line_data:
             map.append(list(row))
     return map
-    
-game_map = load_map("maps/map")
+#game_map = load_map("maps/map")
 
-def collision_test(rect, tiles):
-    collided = []
-    for tile in tiles:
-        if rect.colliderect(tile):
-            collided.append(tile)
-    return collided
+# infinite world gen
+# chunks are put into a dictionary, each chunk is a list of tiles
+CHUNK_SIZE = 8
+def gen_chunk(x, y):
+    chunk_data = []
+    for y_pos in range(CHUNK_SIZE):
+        for x_pos in range(CHUNK_SIZE):
+            target_x = x * CHUNK_SIZE + x_pos # real pos for the tiles
+            target_y = y * CHUNK_SIZE + y_pos # as the x and are loc of chunks, not tiles
+            tile_type = 0 # air tile
+            if target_y > 10:
+                tile_type = 2 # dirt
+            elif target_y == 10:
+                tile_type = 1 # grass
+            elif target_y == 9 and rand.randint(1,3) == 1:
+                tile_type = 3 # plants
 
-# separate x and y axis, test for each individually
-# movement just list x and y of directions moved
-# rect is the rectangle being moved, i.e. the player
-def move(rect, mvmt, tiles):
-    # dict to keep track of where collision occurs for later use
-    collision_directions = {'top' : False, 'bottom' : False, 'right' : False, 'left' : False}
-    rect.x += mvmt[0]
-    collided = collision_test(rect, tiles)
-    for tile in collided:
-        if mvmt[0] > 0: # moving right
-            # when player moving right and collides with tile in front of it,
-            # put the rect to the left of tile
-            rect.right = tile.left
-            collision_directions['right'] = True
-        elif mvmt[0] < 0: # moving left
-            rect.left = tile.right
-            collision_directions['left'] = True
-
-    rect.y += mvmt[1]
-    collided = collision_test(rect, tiles)
-    for tile in collided:
-        if mvmt[1] > 0: # falling down
-            rect.bottom = tile.top
-            collision_directions['bottom'] = True
-        elif mvmt[1] < 0: # going up
-            rect.top = tile.bottom
-            collision_directions['top'] = True
-    return rect, collision_directions
+            if tile_type != 0:
+                chunk_data.append([[target_x, target_y], tile_type])
+    return chunk_data
+# will look as follows:
+# {'1;1':chunk_data, '1;2':chunk_data}
+game_map = {}
 
 while 1: # game loop
     # fill screen each iter to not leave trail of images moving on screen
     display.fill((0, 200, 200))
 
+    # sfx for walking on grass
+    if grass_sfx_timer > 0:
+        grass_sfx_timer -= 1
+
     # make scroll follow player
     # adjust to center display on player (half display w/h + half player w/h)
     display_xcenter = 152
     display_ycenter = 106
-    true_scroll[0] += (player_rect.x - true_scroll[0] - display_xcenter)/16
-    true_scroll[1] += (player_rect.y - true_scroll[1] - display_ycenter)/10
+    true_scroll[0] += (player.x - true_scroll[0] - display_xcenter)/16
+    true_scroll[1] += (player.y - true_scroll[1] - display_ycenter)/10
     scroll = true_scroll.copy()
     scroll[0] = int(scroll[0]) # convert to ints to avoid visual tearing of tiles
     scroll[1] = int(scroll[1])
@@ -153,6 +121,7 @@ while 1: # game loop
 
     # render game map iterating through each cell of 2D game map
     tile_rects = []
+    ''' Old rendering using a game map txt file
     y = 0
     for row in game_map:
         x = 0
@@ -168,6 +137,27 @@ while 1: # game loop
                 tile_rects.append(pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE))
             x += 1
         y += 1
+        '''
+
+    # displaying the infinite rendering
+    # 1 tile is 16x16 pixels, 8 tiles per chunk, means 128x128 pixels per chunk rendered
+    # display size is 300x200, 300/128 = 2.34375, 200/128 = 1.5625
+    # round up and add 1 for number of chunks to render at a time
+    # calculate chunk id's and send to render function
+    for y in range(3):
+        for x in range(4):
+            # x, y relative locations based on window
+            # -1 bc location of each chunk is based on the top left corner of each chunk, so more chunks rendered on right ow
+            target_x = x - 1 + int(round(scroll[0]/(CHUNK_SIZE*TILE_SIZE)))
+            target_y = y - 1 + int(round(scroll[1]/(CHUNK_SIZE*TILE_SIZE)))
+            target_chunk = str(target_x) + ';' + str(target_y)
+            if target_chunk not in game_map:
+                game_map[target_chunk] = gen_chunk(target_x, target_y)
+            for tile in game_map[target_chunk]:
+                display.blit(tile_ind[tile[1]], (tile[0][0]*TILE_SIZE-scroll[0], tile[0][1]*TILE_SIZE-scroll[1]))
+                if tile[1] in [1,2]:
+                    # append dirt and grass rectangles to collideable tile list
+                    tile_rects.append(pygame.Rect(tile[0][0]*TILE_SIZE, tile[0][1]*TILE_SIZE, TILE_SIZE, TILE_SIZE))
 
     # update movement velocity (not position)
     player_mvmt = [0, 0]
@@ -182,42 +172,39 @@ while 1: # game loop
 
     # set action for player animations
     if player_mvmt[0] > 0:
-        player_action, player_frame = change_action(player_action, player_frame, 'run')
-        player_flip = False
+        player.set_action('run')
+        player.set_flip(False)
     if player_mvmt[0] == 0:
-        player_action, player_frame = change_action(player_action, player_frame, 'idle')
+        player.set_action('idle')
     if player_mvmt[0] < 0:
-        player_action, player_frame = change_action(player_action, player_frame, 'run')
-        player_flip = True
+        player.set_action('run')
+        player.set_flip(True)
 
     # call move function on player
-    player_rect, collisions = move(player_rect, player_mvmt, tile_rects)
+    collision_types = player.move(player_mvmt, tile_rects)
 
     # check for touching floor collisions for falling off ledges,
     # ait timer improves floor collision physics
-    if collisions['bottom'] == True:
+    if collision_types['bottom'] == True:
         player_ymomentum = 0
         air_timer = 0
+        if player_mvmt[0] != 0 and grass_sfx_timer == 0:
+            grass_sfx_timer = 20
+            rand.choice(grass_sfx).play()
     else:
         air_timer += 1
 
-    if collisions['left'] == True or collisions['right'] == True:
+    if collision_types['left'] == True or collision_types['right'] == True:
         air_timer = 1
 
     # touching ceiling collision for jumping and hitting head
-    if collisions['top'] == True:
+    if collision_types['top'] == True:
         player_ymomentum = 0
 
-    # coords increase from top left, to bottom right
-    player_frame += 1
-    if player_frame >= len(anim_db[player_action]):
-        player_frame = 0
-    # access the img id corresponding to the player_frame of the current action
-    player_img_id = anim_db[player_action][player_frame]
-    # access the id of the loaded images list
-    player_img = animation_frames[player_img_id]
-    display.blit(pygame.transform.flip(player_img, player_flip, False), (player_rect.x - scroll[0], player_rect.y - scroll[1])) # put img loaded onto screen
+    player.change_frame(1)
+    player.display(display, scroll)
 
+    # react to key press/release events
     for event in pygame.event.get(): # event loop
         if event.type == pygame.QUIT: # check for window quit
             pygame.quit()
@@ -230,6 +217,7 @@ while 1: # game loop
             if event.key == pygame.K_SPACE: # jump
                 # player has 6 frames allotted air time before jumping
                 if air_timer <= 6:
+                    jump_sfx.play()
                     player_ymomentum = -5
         if event.type == pygame.KEYUP: # when keyup, set movements False
             if event.key == pygame.K_RIGHT:
