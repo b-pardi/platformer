@@ -381,6 +381,12 @@ class particle(object):
 Miscellaneous
 '''
 
+def render_text(text, font, color, x=0, y=0):
+    text_obj = font.render(text, 1, color)
+    text_rect = text_obj.get_rect()
+    text_rect.topleft = (x , y)
+    return (text_obj, text_rect)
+
 def swap_color(img,old_c,new_c):
     global e_colorkey
     img.set_colorkey(old_c)
