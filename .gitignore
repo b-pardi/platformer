@@ -1,2 +1,4 @@
+.gitignore
 engine.py
 Platformer.py
+exe

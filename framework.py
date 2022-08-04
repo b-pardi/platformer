@@ -381,6 +381,12 @@ class particle(object):
 Miscellaneous
 '''
 
+def scale_mouse(win_size, disp_size):
+    mx, my = pygame.mouse.get_pos()
+    mx /= win_size[0]/disp_size[0]
+    my /= win_size[1]/disp_size[1]
+    return (mx, my)
+
 def render_text(text, font, color, x=0, y=0):
     text_obj = font.render(text, 1, color)
     text_rect = text_obj.get_rect()
