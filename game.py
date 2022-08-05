@@ -2,6 +2,7 @@ import pygame, sys
 import random as rand
 import framework as f
 import objects as o
+import math
 #import menus as m
 
 '''
@@ -25,7 +26,7 @@ clock = pygame.time.Clock()
 FPS = 60
 click = False
 WHITE = (255,255,255)
-BLACK = (255, 255, 255)
+BLACK = (0,0,0)
 FONT = pygame.font.Font("data/Pixeled.ttf", 20)
 WINDOW_SIZE = (800, 600)
 DISPLAY_SIZE = (300, 200)
@@ -233,6 +234,7 @@ class Game():
         self.window_size = WINDOW_SIZE
         self.mx, self.my = f.scale_mouse(self.window_size, DISPLAY_SIZE)
         self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
+        self.collision_tol = 10
 
         # declaring initial variables for use in game loop
         self.player_loc = [50,50] # initial location of player
@@ -392,34 +394,45 @@ class Game():
                     if player.obj.rect.colliderect(enemy[1].obj.rect):
                         self.player_ymomentum = -4
 
-            # particles [loc, vel, timer, tileloc]
+            # particles [loc, vel, timer, tileloc, rect]
             if self.clicking:
                 for i in range(3):
-                    particles.append([[self.mx, self.my], [rand.randint(0, 20)/10 - 1, -2], rand.randint(4, 6), [int(self.mx/16), int(self.my/16)]])
+                    p_loc = [self.mx, self.my]
+                    p_vel = [rand.randint(0, 20)/10 - 1, -2]
+                    p_timer = rand.randint(4, 6)
+                    p_tile_loc = [int((self.mx+scroll[0])/TILE_SIZE), int((self.my+scroll[1])/TILE_SIZE)]
+                    p_rect = pygame.Rect(p_loc[0], p_loc[1], p_timer, p_timer)
+                    particles.append([p_loc, p_vel, p_timer, p_tile_loc, p_rect])
             for i, particle in sorted(enumerate(particles), reverse=True):
                 # x coord incr by x velocity
                 particle[0][0] += particle[1][0]
                 particle[3] = [int((particle[0][0]+scroll[0])/TILE_SIZE), int((particle[0][1]+scroll[1])/TILE_SIZE)]
-                if particle[3][0] in map_collideable[0] and particle[3][1] in map_collideable[1]:
-                    if particle[3] in map_collideable[2]:
-                        print(f'collidedx: {int((particle[0][0]+scroll[0])/16)};{int((particle[0][1]+scroll[1])/16)} --- {map_collideable[0]}')
-                        particle[1][0] = -0.85 * particle[1][0]
-                        particle[0][0] += particle[1][0] * 2
+                particle[4] = pygame.Rect(particle[0][0]-particle[2], particle[0][1]-particle[2], particle[2]*2, particle[2]*2)
+
+                for tile in tile_rects:
+                    if(particle[3] in map_collideable[2]):
+                        if particle[4].colliderect(tile): # collision occurs
+                            if (abs(particle[4].left - tile.right < self.collision_tol)) or (abs(particle[4].right - tile.left < self.collision_tol)): # left/right of particle
+                                particle[1][0] = -0.85 * particle[1][0]
+                                particle[0][0] += particle[1][0] * 2
 
                 particle[0][1] += particle[1][1]
                 particle[3] = [int((particle[0][0]+scroll[0])/TILE_SIZE), int((particle[0][1]+scroll[1])/TILE_SIZE)]
-                
-                if particle[3][0] in map_collideable[0] and particle[3][1] in map_collideable[1]:
-                    if particle[3] in map_collideable[2]:
-                        print(f'collidedy: {int((particle[0][0]+scroll[0])/16)};{int((particle[0][1]+scroll[1])/16)} --- {map_collideable[1]}')
-                        particle[1][1] = -0.85 * particle[1][1]
-                        particle[0][1] += particle[1][1] *2
+                particle[4] = pygame.Rect(particle[0][0]-particle[2], particle[0][1]-particle[2], particle[2]*2, particle[2]*2)
+
+                for tile in tile_rects:
+                    if(particle[3] in map_collideable[2]):
+                        if particle[4].colliderect(tile): # collision occurs
+                            if (abs(particle[4].bottom - tile.top) < self.collision_tol) or (abs(particle[4].top - tile.bottom < self.collision_tol)): # top/bottom of particle
+                                particle[1][1] = -0.85 * particle[1][1]
+                                particle[0][1] += particle[1][1] * 2
 
 
-
-                particle[2] -= 0.01
+                particle[2] -= 0.03
                 particle[1][1] += 0.1
+                #pygame.draw.rect(display, BLACK, particle[4])
                 pygame.draw.circle(display, (150, 0, 150), [int(particle[0][0]), int(particle[0][1])], int(particle[2]))
+                
                 if particle[2] <= 0:
                     # must enumerate reverse sorted list when removing during iteration
                     # b/c when removing because of how indexing shifts down, the item after the removed one is skipped
