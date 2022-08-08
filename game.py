@@ -2,7 +2,7 @@ import pygame, sys
 import random as rand
 import framework as f
 import objects as o
-import math
+import time
 #import menus as m
 
 '''
@@ -27,7 +27,9 @@ FPS = 60
 click = False
 WHITE = (255,255,255)
 BLACK = (0,0,0)
-FONT = pygame.font.Font("data/Pixeled.ttf", 20)
+TITLE_FONT = pygame.font.Font("data/Pixeled.ttf", 20)
+OPT_FONT = pygame.font.Font("data/Pixeled.ttf", 4)
+BUTTON_FONT = pygame.font.Font("data/Pixeled.ttf", 8)
 WINDOW_SIZE = (800, 600)
 DISPLAY_SIZE = (300, 200)
 MONITOR_SIZE = (pygame.display.Info().current_w, pygame.display.Info().current_h)
@@ -110,7 +112,6 @@ def load_map(path): # game_map[y][x]
         y+=1
     
     collideable = (collideablex, collideabley, collideablep)
-    print(collideablep)
     return map, collideable
 
 
@@ -146,18 +147,17 @@ class Menu():
         self.scale = SCALE_WINDOWED
         self.is_fullscreen = False
         self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
-        self.main_menu_text = f.render_text('main menu', FONT, BLACK, 50, 20)
-        self.start_text = f.render_text('Start', FONT, BLACK)
-        self.opt_text = f.render_text('Options', FONT, BLACK)
+        self.main_menu_text = f.render_text('main menu', TITLE_FONT, BLACK, 50, 20)
         self.mx, self.my = f.scale_mouse(self.window_size, DISPLAY_SIZE)
         self.click = False
+        self.does_continue = False
+        self.game = Game()
 
     def is_fullscreen(self):
         return self.is_fullscreen
 
     def main_menu(self):
-        game = Game()
-        game_text_obj = FONT.render('Start', True, BLACK)
+        start_text_obj = BUTTON_FONT.render('Start', True, BLACK)
         
         while 1:
             display.fill((0,120,120))
@@ -167,15 +167,14 @@ class Menu():
             opt_button = pygame.Rect(DISPLAY_SIZE[0]/2-25, DISPLAY_SIZE[1]/2+20, 50, 20)
             pygame.draw.rect(display, (200,200,200), game_button)
             pygame.draw.rect(display, (200,200,200), opt_button)
-            game_text_rect = game_text_obj.get_rect(center=display.get_rect().center)
-            game_text_rect.center = self.window_size[0]/2, self.window_size[1]/2-100
+            start_text_rect = start_text_obj.get_rect(center=game_button.center)
 
             if game_button.collidepoint((self.mx, self.my)):
                 pygame.draw.rect(display, (20, 200, 20), game_button)
                 if self.click:
-                    game.is_fullscreen = self.is_fullscreen
-                    game.window_size = self.window_size
-                    game.run()
+                    self.game.is_fullscreen = self.is_fullscreen
+                    self.game.window_size = self.window_size
+                    self.game.run()
             if opt_button.collidepoint((self.mx, self.my)):
                 pygame.draw.rect(display, (20, 200, 20), opt_button)
                 if self.click:
@@ -208,11 +207,75 @@ class Menu():
                     if event.button == 1:
                         self.click = True
 
+            display.blit(start_text_obj, start_text_rect)
             display.blit(self.main_menu_text[0], self.main_menu_text[1])
             self.screen.blit(pygame.transform.scale(display, self.window_size), (0, 0))
             
             pygame.display.update()
             clock.tick(60)
+
+    def game_over(self):
+        cont_text_obj = BUTTON_FONT.render('Continue', True, BLACK)
+        menu_text_obj = BUTTON_FONT.render('Main Menu', True, BLACK)
+
+        while 1:
+            self.mx, self.my = f.scale_mouse(self.window_size, DISPLAY_SIZE)
+            cont_button = pygame.Rect(DISPLAY_SIZE[0]/2-25, DISPLAY_SIZE[1]/2-20, 50, 20)
+            menu_button = pygame.Rect(DISPLAY_SIZE[0]/2-25, DISPLAY_SIZE[1]/2+20, 50, 20)
+            pygame.draw.rect(display, (200,200,200), cont_button)
+            pygame.draw.rect(display, (200,200,200), menu_button)
+            cont_text_rect = cont_text_obj.get_rect(center=cont_button.center)
+            menu_text_rect = menu_text_obj.get_rect(center=menu_button.center)
+
+            if cont_button.collidepoint((self.mx, self.my)):
+                pygame.draw.rect(display, (20, 200, 20), cont_button)
+                if self.click:
+                    self.game.is_fullscreen = self.is_fullscreen
+                    self.game.window_size = self.window_size
+                    self.game.running = True
+                    self.does_continue = True
+                    self.game.run()
+            if menu_button.collidepoint((self.mx, self.my)):
+                pygame.draw.rect(display, (20, 200, 20), menu_button)
+                if self.click:
+                    self.does_continue = False
+                    self.main_menu()
+
+            self.click = False
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.VIDEORESIZE:
+                    if not self.is_fullscreen:
+                        self.window_size = (event.w, event.h)
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        sys.exit()
+                    if event.key == pygame.K_F11:
+                        self.is_fullscreen = not self.is_fullscreen
+                        if self.is_fullscreen:
+                            self.screen = pygame.display.set_mode(MONITOR_SIZE, pygame.FULLSCREEN)
+                            self.window_size = MONITOR_SIZE
+                        else:
+                            self.window_size = WINDOW_SIZE
+                            self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
+
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:
+                        self.click = True
+
+            display.blit(cont_text_obj, cont_text_rect)
+            display.blit(menu_text_obj, menu_text_rect)
+            display.blit(self.main_menu_text[0], self.main_menu_text[1])
+            self.screen.blit(pygame.transform.scale(display, self.window_size), (0, 0))
+        
+            pygame.display.update()
+            clock.tick(FPS)
+        return self.does_continue
 
 def options():
     pass
@@ -224,10 +287,12 @@ particles = []
 
 class Game():
     def __init__(self):
+        self.running = False
         self.grass_sfx_timer = 0
         self.moving_left = False
         self.moving_right = False
         self.player_ymomentum = 0 
+        self.player_xmomentum = 0
         self.air_timer = 0 # delay timer to improve jumping
         self.is_fullscreen = False
         self.clicking = False
@@ -235,8 +300,9 @@ class Game():
         self.mx, self.my = f.scale_mouse(self.window_size, DISPLAY_SIZE)
         self.screen = pygame.display.set_mode(self.window_size, pygame.RESIZABLE)
         self.collision_tol = 10
-
-        # declaring initial variables for use in game loop
+        self.max_health = 80
+        self.cur_health = self.max_health
+        self.health_bar = [pygame.Rect(20, 20, 80, 10), self.cur_health]
         self.player_loc = [50,50] # initial location of player
         self.true_scroll = [0,0] # move tiles for scrolling screen
         self.enemy_buffer = 4 # num pixels enemy will chase player til (not on top of player)
@@ -246,10 +312,37 @@ class Game():
         self.background_objects = [[0.25,[120,10,70,400]],[0.25,[280,30,40,400]],
                             [0.5,[30,40,40,400]],[0.5,[130,90,100,400]],[0.5,[300,80,120,400]]]
 
+    def wait(self, amt):
+        frames_waiting = amt*FPS
+        frame = 0
+        while frame < frames_waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            frame += 1
+            pygame.display.update()
+            clock.tick(FPS)
+
+    def health(self, cur_health, amt=0):
+        cur_health -= amt*self.max_health/100
+        health_bar = pygame.Rect(20, 20, cur_health, 10)
+        if cur_health < 1:
+            self.running = False
+            menu.game_over()
+            if self.running:
+                cur_health = 100
+                health_bar = pygame.Rect(20, 20, cur_health, 10)
+            else:
+                self.running = False
+        
+        return health_bar, cur_health
+
     def run(self):
-        running = True
+        self.running = True
         game_map, map_collideable = load_map("data/maps/map")
-        while running: # game loop
+        while self.running: # game loop
             # fill screen each iter to not leave trail of images moving on screen
             display.fill((0, 200, 200))
 
@@ -322,6 +415,12 @@ class Game():
 
             # update movement velocity (not position)
             player_mvmt = [0, 0]
+            player_mvmt[0] += self.player_xmomentum
+            if self.player_xmomentum < 0:
+                self.player_xmomentum += 1
+            elif self.player_xmomentum > 0:
+                self.player_xmomentum -= 1
+
             if self.moving_right:
                 player_mvmt[0] += 2
             if self.moving_left:
@@ -393,21 +492,23 @@ class Game():
                     enemy[1].display(display, scroll)
                     if player.obj.rect.colliderect(enemy[1].obj.rect):
                         self.player_ymomentum = -4
+                        self.player_xmomentum = 0
+                        self.health_bar = self.health(self.health_bar[1], 5)
 
             # particles [loc, vel, timer, tileloc, rect]
             if self.clicking:
                 for i in range(3):
-                    p_loc = [self.mx, self.my]
-                    p_vel = [rand.randint(0, 20)/10 - 1, -2]
-                    p_timer = rand.randint(4, 6)
-                    p_tile_loc = [int((self.mx+scroll[0])/TILE_SIZE), int((self.my+scroll[1])/TILE_SIZE)]
-                    p_rect = pygame.Rect(p_loc[0], p_loc[1], p_timer, p_timer)
+                    p_loc = [self.mx, self.my] # location of particle
+                    p_vel = [rand.randint(0, 20)/10 - 1, -2] # velocity of particle
+                    p_timer = rand.randint(4, 6) # timer decreasing its size
+                    p_tile_loc = [int((self.mx+scroll[0])/TILE_SIZE), int((self.my+scroll[1])/TILE_SIZE)] # location of particle relative to tile scale
+                    p_rect = pygame.Rect(p_loc[0], p_loc[1], p_timer, p_timer) # rect of particle for collisions
                     particles.append([p_loc, p_vel, p_timer, p_tile_loc, p_rect])
             for i, particle in sorted(enumerate(particles), reverse=True):
                 # x coord incr by x velocity
-                particle[0][0] += particle[1][0]
-                particle[3] = [int((particle[0][0]+scroll[0])/TILE_SIZE), int((particle[0][1]+scroll[1])/TILE_SIZE)]
-                particle[4] = pygame.Rect(particle[0][0]-particle[2], particle[0][1]-particle[2], particle[2]*2, particle[2]*2)
+                particle[0][0] += particle[1][0] # increase particle x velocity
+                particle[3] = [int((particle[0][0]+scroll[0])/TILE_SIZE), int((particle[0][1]+scroll[1])/TILE_SIZE)] # update relative tile location
+                particle[4] = pygame.Rect(particle[0][0]-particle[2], particle[0][1]-particle[2], particle[2]*2, particle[2]*2) # update particle rects
 
                 for tile in tile_rects:
                     if(particle[3] in map_collideable[2]):
@@ -481,7 +582,8 @@ class Game():
                 if event.type == pygame.MOUSEBUTTONUP:
                     if event.button == 1:
                         self.clicking = False
-                        
+                    
+            pygame.draw.rect(display, (255, 0, 0), self.health_bar[0])
             # scale display size to the size of screen
             if self.is_fullscreen:
                 self.screen.blit(pygame.transform.scale(display, MONITOR_SIZE), (0, 0))
